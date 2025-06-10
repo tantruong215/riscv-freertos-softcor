@@ -16,3 +16,18 @@ Goals:
 Implement UART echo loop as sanity check
 Validate task-switching via LED blink + UART combo
 Prepare memory map and interrupt handler for SPI ADC sampling
+
+
+June 10, 2025
+
+Finished creating the freertos/portable/RISC-V directory structure.
+Added initial portmacro.h definitions for RISC-V (stack frame layout, critical-section macros).
+Stubbed out portSAVE_CONTEXT and portRESTORE_CONTEXT assembly functions.
+Drafted machine-timer setup in port.c to generate FreeRTOS tick interrupts.
+Reviewed and adjusted FreeRTOSConfig.h parameters (tick rate, heap model).
+
+Goals:
+Implement and unit-test context-save/restore routines in simulation
+Finalize timer initialization and verify periodic tick in Icarus Verilog
+Begin writing UART driver & echo loop sanity test
+Draft memory map & interrupt handler outline for SPI-ADC task sampling
