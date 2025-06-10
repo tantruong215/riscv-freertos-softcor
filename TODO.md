@@ -7,9 +7,9 @@
 - [ ] Blink LED task and log SPI samples to UART
 - [ ] Document integration process and core constraints
 
-JUNE 9th 
-# TODO
 
+# TODO
+JUNE 9th 
 - [ ] Complete FreeRTOS port layer  
   - Implement `portSAVE_CONTEXT` and `portRESTORE_CONTEXT` routines  
   - Configure and initialize machine-timer (SysTick equivalent)  
