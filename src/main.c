@@ -1,19 +1,20 @@
-#include \"freertos/FreeRTOS.h\"
-#include \"freertos/task.h\"
-#include \"driver/gpio.h\"
+#include "FreeRTOS.h"
+#include "task.h"
+#include "uart_driver.h"
 
 extern void vPortSetupTimerInterrupt(void);
 
-void vLedTask(void *p) {
+void vEchoTask(void *pv) {
+    uart_init();
     for (;;) {
-        gpio_toggle(LED_PIN);
-        vTaskDelay(pdMS_TO_TICKS(500));
+        char c = uart_getc();
+        uart_putc(c);
     }
 }
 
 int main(void) {
     vPortSetupTimerInterrupt();
-    xTaskCreate(vLedTask, \"LED\", 128, NULL, 1, NULL);
+    xTaskCreate(vEchoTask, "Echo", 128, NULL, 1, NULL);
     vTaskStartScheduler();
     for (;;);
 }
