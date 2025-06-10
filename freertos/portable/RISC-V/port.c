@@ -51,3 +51,8 @@ void vPortEndScheduler( void )
 {
     for( ;; );
 }
+void vPortSetupTimerInterrupt(void) {
+    uint64_t now = MTIME;
+    MTIMECMP = now + (configCPU_CLOCK_HZ / TICK_RATE_HZ);
+    __asm volatile(\"csrs mie, %0\" :: \"r\"(1 << 7));
+}

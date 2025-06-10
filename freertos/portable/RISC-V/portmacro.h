@@ -38,3 +38,7 @@ extern void vPortYield( void );
 #define FreeRTOS_Tick_Handler MachineTimer_IRQHandler
 
 #endif /* PORTMACRO_H */
+#define MTIME       (*(volatile uint64_t*)0x0200BFF8)
+#define MTIMECMP    (*(volatile uint64_t*)0x02004000)
+#define TICK_RATE_HZ 1000UL
+extern void xPortSysTickHandler(void);
