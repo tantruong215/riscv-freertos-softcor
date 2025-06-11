@@ -25,6 +25,8 @@ static SemaphoreHandle_t rxSem;
 void UART_IRQHandler(void);
 
 void uart_init(void) {
+    RingBuf_Init(&uartRx);
+    RingBuf_Init(&uartTx);
     /* Create a semaphore to signal RX data */
     rxSem = xSemaphoreCreateBinary();
     
