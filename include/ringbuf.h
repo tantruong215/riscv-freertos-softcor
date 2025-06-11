@@ -4,30 +4,28 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#define UART_BUF_SIZE 128
+#define RINGBUF_SIZE_PWR2 128       // must be a power of two
 
 typedef struct {
-    uint8_t  buffer[UART_BUF_SIZE];
+    uint8_t  buffer[RINGBUF_SIZE_PWR2];
     volatile uint16_t head;
     volatile uint16_t tail;
     volatile bool     overflow;
 } RingBuf_t;
 
-/* Initialize buffer */
 static inline void RingBuf_Init(RingBuf_t *rb) {
     rb->head = rb->tail = 0;
     rb->overflow = false;
 }
 
-/* Advance an index with wrap (power-of-2 size) */
 static inline uint16_t RingBuf_Next(uint16_t idx) {
-    return (idx + 1) & (UART_BUF_SIZE - 1);
+    return (idx + 1) & (RINGBUF_SIZE_PWR2 - 1);
 }
 
-/* Check empty/full */
 static inline bool RingBuf_IsEmpty(const RingBuf_t *rb) {
     return rb->head == rb->tail;
 }
+
 static inline bool RingBuf_IsFull(const RingBuf_t *rb) {
     return RingBuf_Next(rb->head) == rb->tail;
 }
