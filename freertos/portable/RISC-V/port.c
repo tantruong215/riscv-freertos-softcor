@@ -56,3 +56,14 @@ void vPortSetupTimerInterrupt(void) {
     MTIMECMP = now + (configCPU_CLOCK_HZ / TICK_RATE_HZ);
     __asm volatile(\"csrs mie, %0\" :: \"r\"(1 << 7));
 }
+/* PLIC setup */
+#define PLIC_THRESHOLD      ((volatile uint32_t*)0x0C000000)
+#define PLIC_PRIORITY_BASE  ((volatile uint32_t*)0x0C001000)
+#define PLIC_ENABLE_BASE    ((volatile uint32_t*)0x0C002000)
+void PLIC_Init(void) {
+    *PLIC_THRESHOLD = 0;
+    PLIC_PRIORITY_BASE[7] = 3;   // Machine-timer
+    PLIC_PRIORITY_BASE[10] = 1;  // UART
+    // set SPI, I2C similarly...
+    PLIC_ENABLE_BASE[0] |= (1<<7) | (1<<10);  
+}

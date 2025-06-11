@@ -91,7 +91,10 @@ void UART_IRQHandler(void) {
         uint16_t next = (uart_rx_buf.head + 1) & (RX_BUF_SIZE - 1);
         if (next != uart_rx_buf.tail) {
             uart_rx_buf.buffer[uart_rx_buf.head] = b;
-            uart_rx_buf.head = next;
+            uart_rx_buf.head = uart_rx_buf.tail = 0;
+uart_rx_buf.overflow = false;
+uart_tx_buf.head = uart_tx_buf.tail = 0;
+uart_tx_buf.overflow = false;
         }
     }
 
@@ -101,3 +104,11 @@ void UART_IRQHandler(void) {
         uart_tx_buf.tail = (uart_tx_buf.tail + 1) & (TX_BUF_SIZE - 1);
     }
 }
+// In UART_IRQHandler:
+    uint16_t next = (uart_rx_buf.head + 1) & (RX_BUF_SIZE - 1);
+    if (next != uart_rx_buf.tail) {
+        uart_rx_buf.buffer[uart_rx_buf.head] = UART_DATA;
+        uart_rx_buf.head = next;
+    } else {
+        uart_rx_buf.overflow = true;
+    }
