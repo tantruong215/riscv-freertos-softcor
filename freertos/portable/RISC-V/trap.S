@@ -16,3 +16,9 @@ MachineTimer_Handler:
     call    xPortSysTickHandler
 
     mret
+    /* Machine-Timer exception slot (cause 7) */
+    .align 2
+    .global MachineTimer_IRQHandler
+MachineTimer_IRQHandler:
+    call MachineTimer_IRQHandler
+    mret

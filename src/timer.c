@@ -11,6 +11,6 @@ void MachineTimer_IRQHandler(void)
     uint64_t now = MTIME;
     MTIMECMP = now + TICK_DELTA;    // schedule next tick
 
-    // Call the FreeRTOS tick handler
+    /* Call the FreeRTOS tick handler */
     vPortSysTickHandler();
 }
