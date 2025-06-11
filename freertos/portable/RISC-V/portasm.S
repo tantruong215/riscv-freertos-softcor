@@ -79,3 +79,108 @@ portRESTORE_CONTEXT:
     lw      ra,   0(sp)
     addi    sp,   sp,  4*34       /* deallocate stack frame */
     ret
+    /* Save mstatus CSR */
+    csrr    t0, mstatus
+    sw      t0,  4*28(sp)
+    /* Restore mstatus CSR */
+    lw      t0,  4*28(sp)
+    csrw    mstatus, t0
+    /* Restore mstatus CSR */
+    lw      t0,   112(sp)
+    csrw    mstatus, t0
+
+    /* Save mstatus CSR */
+    csrr    t0,   mstatus
+    sw      t0,   112(sp)
+    .global portRESTORE_CONTEXT
+portRESTORE_CONTEXT:
+    # a0 = pointer to current TCB''s stack pointer storage
+
+    # 1) Load SP from TCB
+    lw      sp,   116(a0)
+
+    # 2) Restore mstatus
+    lw      t0,   112(sp)
+    csrw    mstatus, t0
+
+    # 3) Restore saved registers in reverse order
+    lw      s11, 108(sp)
+    lw      s10, 104(sp)
+    lw      s9,  100(sp)
+    lw      s8,   96(sp)
+    lw      s7,   92(sp)
+    lw      s6,   88(sp)
+    lw      s5,   84(sp)
+    lw      s4,   80(sp)
+    lw      s3,   76(sp)
+    lw      s2,   72(sp)
+    lw      s1,   68(sp)
+    lw      s0,   64(sp)
+    lw      a7,   60(sp)
+    lw      a6,   56(sp)
+    lw      a5,   52(sp)
+    lw      a4,   48(sp)
+    lw      a3,   44(sp)
+    lw      a2,   40(sp)
+    lw      a1,   36(sp)
+    lw      a0,   32(sp)
+    lw      t6,   28(sp)
+    lw      t5,   24(sp)
+    lw      t4,   20(sp)
+    lw      t3,   16(sp)
+    lw      t2,   12(sp)
+    lw      t1,    8(sp)
+    lw      t0,    4(sp)
+    lw      ra,    0(sp)
+
+    # 4) Adjust SP back to before save
+    addi    sp, sp, 4*34
+
+    # 5) Return to the task''s saved PC
+    mret
+    .global portRESTORE_CONTEXT
+portRESTORE_CONTEXT:
+    # a0 = pointer to current TCB’s stack pointer storage
+
+    # 1) Load SP from TCB
+    lw      sp,   116(a0)
+
+    # 2) Restore mstatus
+    lw      t0,   112(sp)
+    csrw    mstatus, t0
+
+    # 3) Restore GPRs in reverse order
+    lw      s11, 108(sp)
+    lw      s10, 104(sp)
+    lw      s9,  100(sp)
+    lw      s8,   96(sp)
+    lw      s7,   92(sp)
+    lw      s6,   88(sp)
+    lw      s5,   84(sp)
+    lw      s4,   80(sp)
+    lw      s3,   76(sp)
+    lw      s2,   72(sp)
+    lw      s1,   68(sp)
+    lw      s0,   64(sp)
+    lw      a7,   60(sp)
+    lw      a6,   56(sp)
+    lw      a5,   52(sp)
+    lw      a4,   48(sp)
+    lw      a3,   44(sp)
+    lw      a2,   40(sp)
+    lw      a1,   36(sp)
+    lw      a0,   32(sp)
+    lw      t6,   28(sp)
+    lw      t5,   24(sp)
+    lw      t4,   20(sp)
+    lw      t3,   16(sp)
+    lw      t2,   12(sp)
+    lw      t1,    8(sp)
+    lw      t0,    4(sp)
+    lw      ra,    0(sp)
+
+    # 4) Restore SP
+    addi    sp, sp, 4*34
+
+    # 5) Return to task via mret
+    mret
