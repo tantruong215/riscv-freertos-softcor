@@ -67,3 +67,23 @@ int i2c_read(uint8_t dev_addr, uint8_t reg_addr, uint8_t *data, size_t len) {
     }
     return 0;
 }
+// In i2c_init():
+    i2c_tx_buf.head = i2c_tx_buf.tail = 0;
+    i2c_rx_buf.head = i2c_rx_buf.tail = 0;
+
+// Add IRQ handler to src/i2c.c:
+void I2C_IRQHandler(void) {
+    uint32_t st = I2C_STATUS;
+    if (st & I2C_RX_ACK == 0) {
+        uint8_t b = I2C_DATA;
+        uint16_t n = (i2c_rx_buf.head + 1) & (I2C_BUF_SIZE - 1);
+        if (n != i2c_rx_buf.tail) {
+            i2c_rx_buf.buffer[i2c_rx_buf.head] = b;
+            i2c_rx_buf.head = n;
+        }
+    }
+    if (!(st & I2C_TIP) && i2c_tx_buf.tail != i2c_tx_buf.head) {
+        I2C_DATA = i2c_tx_buf.buffer[i2c_tx_buf.tail];
+        i2c_tx_buf.tail = (i2c_tx_buf.tail + 1) & (I2C_BUF_SIZE - 1);
+    }
+}

@@ -82,3 +82,22 @@ void UART_IRQHandler(void) {
     
     /* Clear IRQ flag if needed (platform-specific) */
 }
+void UART_IRQHandler(void) {
+    uint32_t status = UART_STATUS;
+
+    // 1. RX ready?
+    if (status & UART_RX_READY) {
+        uint8_t b = UART_DATA;
+        uint16_t next = (uart_rx_buf.head + 1) & (RX_BUF_SIZE - 1);
+        if (next != uart_rx_buf.tail) {
+            uart_rx_buf.buffer[uart_rx_buf.head] = b;
+            uart_rx_buf.head = next;
+        }
+    }
+
+    // 2. TX ready?
+    if (!(status & UART_TX_BUSY) && (uart_tx_buf.tail != uart_tx_buf.head)) {
+        UART_DATA = uart_tx_buf.buffer[uart_tx_buf.tail];
+        uart_tx_buf.tail = (uart_tx_buf.tail + 1) & (TX_BUF_SIZE - 1);
+    }
+}

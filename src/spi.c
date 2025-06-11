@@ -32,3 +32,23 @@ void spi_transfer(uint8_t *tx, uint8_t *rx, size_t len) {
         }
     }
 }
+// In spi_init():
+    spi_tx_buf.head = spi_tx_buf.tail = 0;
+    spi_rx_buf.head = spi_rx_buf.tail = 0;
+
+// Add IRQ handler to src/spi.c:
+void SPI_IRQHandler(void) {
+    uint32_t st = SPI_STATUS;
+    if (st & SPI_RX_VALID) {
+        uint8_t b = SPI_DATA;
+        uint16_t n = (spi_rx_buf.head + 1) & (SPI_BUF_SIZE - 1);
+        if (n != spi_rx_buf.tail) {
+            spi_rx_buf.buffer[spi_rx_buf.head] = b;
+            spi_rx_buf.head = n;
+        }
+    }
+    if (st & SPI_TX_READY && spi_tx_buf.tail != spi_tx_buf.head) {
+        SPI_DATA = spi_tx_buf.buffer[spi_tx_buf.tail];
+        spi_tx_buf.tail = (spi_tx_buf.tail + 1) & (SPI_BUF_SIZE - 1);
+    }
+}
