@@ -1,4 +1,6 @@
 #include "uart.h"
+#include "ringbuf.h"
+static RingBuf_t uartRx, uartTx;
 #include <stdint.h>
 #include "FreeRTOS.h"
 #include "task.h"
@@ -25,6 +27,8 @@ static SemaphoreHandle_t rxSem;
 void UART_IRQHandler(void);
 
 void uart_init(void) {
+    RingBuf_Init(&uartRx);
+    RingBuf_Init(&uartTx);
     RingBuf_Init(&uartRx);
     RingBuf_Init(&uartTx);
     /* Create a semaphore to signal RX data */
