@@ -1,49 +1,62 @@
-#include "ringbuf.h"
 #include "spi.h"
-#include "FreeRTOS.h"
-#include "task.h"
+#include "memmap.h"    /* defines SPI_BASE_ADDR if you prefer */
+#include <stdbool.h>
 
-static RingBuf_t spiRx, spiTx;
+/* Map registers */
+static volatile uint32_t *SPI_IRQ_ENABLE = (uint32_t *)(SPI_BASE_ADDR + SPI_IRQ_OFFSET);
+static volatile uint32_t *SPI_STATUS     = (uint32_t *)(SPI_BASE_ADDR + SPI_STATUS_OFFSET);
+static volatile uint8_t  *SPI_DATA       = (uint8_t  *)(SPI_BASE_ADDR + SPI_DATA_OFFSET);
+static volatile uint32_t *SPI_CTRL       = (uint32_t *)(SPI_BASE_ADDR + SPI_CTRL_OFFSET);
 
-void SPI_Init(void) {
-    RingBuf_Init(&spiRx);
-    RingBuf_Init(&spiTx);
-    SPI->INT_EN = SPI_RX_INT;    // enable RX IRQ
+/* Define buffers */
+RingBuffer spi_rx_buf;
+RingBuffer spi_tx_buf;
+
+void SPI_Init(void)
+{
+    RingBuffer_Init(&spi_rx_buf, 128);
+    RingBuffer_Init(&spi_tx_buf, 128);
+
+    /* Enable RX and TX interrupts */
+    *SPI_IRQ_ENABLE = SPI_RX_READY | SPI_TX_READY;
 }
 
-void SPI_IRQHandler(void) {
-    uint32_t st = SPI->STATUS;
-    if (st & SPI_RX_INT) {
-        uint8_t d = SPI->DATA;
-        uint16_t next = RingBuf_Next(spiRx.head);
-        if (next -ne spiRx.tail) {
-            spiRx.buffer[spiRx.head] = d;
-            spiRx.head = next;
+bool SPI_SendByte(uint8_t byte)
+{
+    if (!RingBuffer_Put(&spi_tx_buf, byte)) {
+        return false;
+    }
+    /* Kick off TX engine */
+    *SPI_CTRL |= SPI_CTRL_TX_ENABLE;
+    return true;
+}
+
+int SPI_ReceiveByte(void)
+{
+    if (RingBuffer_IsEmpty(&spi_rx_buf)) {
+        return -1;
+    }
+    return (int)RingBuffer_Get(&spi_rx_buf);
+}
+
+void SPI_IRQHandler(void)
+{
+    uint32_t status = *SPI_STATUS;
+
+    if (status & SPI_RX_READY) {
+        uint8_t b = *SPI_DATA;
+        RingBuffer_Put(&spi_rx_buf, b);
+    }
+
+    if (status & SPI_TX_READY) {
+        if (!RingBuffer_IsEmpty(&spi_tx_buf)) {
+            *SPI_DATA = RingBuffer_Get(&spi_tx_buf);
         } else {
-            spiRx.overflow = $true;
+            /* Disable TX when done */
+            *SPI_CTRL &= ~SPI_CTRL_TX_ENABLE;
         }
     }
-    if ((st -band SPI_TX_READY) -and (-not (RingBuf_IsEmpty(&spiTx)))) {
-        SPI->DATA = spiTx.buffer[spiTx.tail];
-        spiTx.tail = RingBuf_Next(spiTx.tail);
-        if (RingBuf_IsEmpty(&spiTx)) {
-            SPI->INT_EN = SPI->INT_EN -band (-bnot SPI_TX_INT);
-        }
-    }
-}
 
-bool SPI_SendByte(uint8_t b) {
-    uint16_t next = RingBuf_Next(spiTx.head);
-    if (next -eq spiTx.tail) { return $false; }  # full
-    spiTx.buffer[spiTx.head] = b;
-    spiTx.head = next;
-    SPI->INT_EN = SPI->INT_EN -bor SPI_TX_INT;    # enable TX IRQ
-    return $true;
-}
-
-int SPI_ReceiveByte(void) {
-    if (RingBuf_IsEmpty(&spiRx)) { return -1; }
-    uint8_t d = spiRx.buffer[spiRx.tail];
-    spiRx.tail = RingBuf_Next(spiRx.tail);
-    return d;
+    /* Clear IRQ flags */
+    *SPI_STATUS = status;
 }

@@ -1,16 +1,43 @@
 #include <stdint.h>
+#include "FreeRTOS.h"
+#include "task.h"
+#include "led.h"
+#include "uart.h"
+#include "i2c.h"
+#include "spi.h"
 
-/* Point mtvec to your vectored table & enable Machine-Timer */
+/* Set up the trap vector & machine-timer interrupt */
 extern void _vector_table(void);
-static void init_traps(void) {
-    uintptr_t vt = (uintptr_t)&_vector_table | 1;    // vectored mode
+static void init_traps(void)
+{
+    uintptr_t vt = (uintptr_t)&_vector_table | 1;  // vectored mode
     __asm volatile("csrw mtvec, %0" :: "r"(vt));
+
+    /* Enable machine-timer interrupts in MIE (bit 7) */
     __asm volatile("csrrs zero, mie, %0" :: "r"(1 << 7));
+    /* Globally enable interrupts (MSTATUS.MIE bit) */
     __asm volatile("csrsi mstatus, %0" :: "i"(1 << 3));
 }
 
-int main(void) {
+/* Configure timer tick for FreeRTOS (1 kHz) */
+extern void prvSetupTimerInterrupt(void);
+
+int main(void)
+{
     init_traps();
-    // Trap vector initint mainextern void _vector_table(void);int mainstatic void init_traps(void)int main{int main    /* mtvec = &_vector_table | vectored mode */int main    uintptr_t vt = (uintptr_t)&_vector_table | 1;int main    __asm volatile("csrw mtvec, %0" :: "r"(vt));int mainint main    /* Enable M-timer interrupt in MIE */int main    __asm volatile("csrrs zero, mie, %0" :: "r"(1 << 7));int mainint main    /* Globally enable interrupts (MIE bit in mstatus) */int main    __asm volatile("csrsi mstatus, %0" :: "i"(1 << 3));int main}int mainint mainint main(void)int main{int main    init_traps();int main    // ? your existing setup ?int main    vTaskStartScheduler();int main    for (;;);int main}int mainint main// Trap vector initint mainextern void _vector_table(void);int mainstatic void init_traps(void)int main{int main    /* mtvec = &_vector_table | vectored mode */int main    uintptr_t vt = (uintptr_t)&_vector_table | 1;int main    __asm volatile("csrw mtvec, %0" :: "r"(vt));int mainint main    /* Enable M-timer interrupt in MIE */int main    __asm volatile("csrrs zero, mie, %0" :: "r"(1 << 7));int mainint main    /* Globally enable interrupts (MIE bit in mstatus) */int main    __asm volatile("csrsi mstatus, %0" :: "i"(1 << 3));int main}int mainint mainint main(void)int main{int main    init_traps();int main    // ? your existing setup ?int main    vTaskStartScheduler();int main    for (;;);int main}
-    // Create UART echo task
-    xTaskCreate(vUARTEchoTask, "Echo", 128, NULL, tskIDLE_PRIORITY+1, NULL);
+    prvSetupTimerInterrupt();
+
+    led_init();
+    UART_Init();
+    I2C_Init();
+    SPI_Init();
+
+    /* Create demo tasks, e.g.: */
+    // xTaskCreate(UART_EchoTask, "UartEcho", 128, NULL, 1, NULL);
+    // xTaskCreate(LED_BlinkTask, "LedBlink", 128, NULL, 1, NULL);
+
+    vTaskStartScheduler();
+
+    /* Should never get here */
+    for (;;);
+}
