@@ -1,38 +1,35 @@
 # scripts/patch_addresses.ps1
-# Reads LED_ADDR and UART_ADDR from top.v, patches src/led.c & src/uart.c, then rebuilds & simulates.
+# Reads LED_BASE_ADDR and UART_BASE_ADDR from src/verilog/top.v
+# and patches them into src/c/led.h and src/c/uart.h
 
-# 1) Read the memory?map from top.v
-$top = Get-Content .\top.v
+# Load top.v
+$top = Get-Content "../src/verilog/top.v"
 
-# Extract the LED and UART base addresses
+# Extract LED address (search for localparam LED_ADDR = 32'h...)
 $ledAddr = ($top |
-    Select-String -Pattern 'LED_ADDR\s*=\s*32\'h([0-9A-Fa-f_]+)' |
+    Select-String -Pattern "localparam\s+LED_ADDR\s*=\s*32'h([0-9A-Fa-f_]+)" |
     ForEach-Object { $_.Matches[0].Groups[1].Value -replace '_','' }
 )
+
+# Extract UART address
 $uartAddr = ($top |
-    Select-String -Pattern 'UART_ADDR\s*=\s*32\'h([0-9A-Fa-f_]+)' |
+    Select-String -Pattern "localparam\s+UART_ADDR\s*=\s*32'h([0-9A-Fa-f_]+)" |
     ForEach-Object { $_.Matches[0].Groups[1].Value -replace '_','' }
 )
 
-# Prepend ?0x?
-$ledAddr  = "0x$ledAddr"
-$uartAddr = "0x$uartAddr"
+if (-not $ledAddr -or -not $uartAddr) {
+    Write-Error "Failed to parse LED_ADDR or UART_ADDR in top.v"
+    exit 1
+}
 
-Write-Host "Detected LED_ADDR = $ledAddr"
-Write-Host "Detected UART_ADDR = $uartAddr"
+# Patch LED header
+(Get-Content "../src/c/led.h") `
+  -replace '#define\s+LED_BASE_ADDR\s+0x[0-9A-Fa-f]+' , "#define LED_BASE_ADDR   0x$ledAddr`U" `
+  | Set-Content "../src/c/led.h"
 
-# 2) Patch src/led.c
-(Get-Content .\src\led.c) `
-  -replace '#define LED_REG\s+\(\*volatile uint32_t\*\)\s*0x[0-9A-Fa-f]+' , "#define LED_REG (*(volatile uint32_t*)$ledAddr)" `
-  | Set-Content .\src\led.c
+# Patch UART header
+(Get-Content "../src/c/uart.h") `
+  -replace '#define\s+UART_BASE_ADDR\s+0x[0-9A-Fa-f]+' , "#define UART_BASE_ADDR  0x$uartAddr`U" `
+  | Set-Content "../src/c/uart.h"
 
-# 3) Patch src/uart.c
-(Get-Content .\src\uart.c) `
-  -replace '#define UART_BASE\s*0x[0-9A-Fa-f]+UL', "#define UART_BASE $uartAddr`UL" `
-  | Set-Content .\src\uart.c
-
-Write-Host "Patched C drivers with new base addresses."
-
-# 4) Rebuild & simulate
-& make clean
-& make sim
+Write-Host "✅ Patched LED_BASE_ADDR and UART_BASE_ADDR in headers."

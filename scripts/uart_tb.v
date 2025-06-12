@@ -2,93 +2,73 @@
 
 module uart_tb;
 
-  // Parameters must match your uart.v
+  // Parameters
   parameter CLK_FREQ  = 50_000_000;
   parameter BAUD_RATE = 115200;
   localparam BIT_TIME = CLK_FREQ / BAUD_RATE;
 
-  // DUT signals
-  reg         clk = 0;
-  reg         rst = 1;
-  reg         rx  = 1;       // idle high
-  wire        tx;
-  wire        rx_valid;
-  wire [7:0]  rx_data;
-  reg  [7:0]  tx_data;
-  reg         tx_start;
-  wire        tx_busy;
+  // Clock & reset
+  reg clk = 0;
+  reg rst = 1;
 
-  // Clock generation
-  always #10 clk = !clk;      // 50 MHz
+  // UART lines
+  reg  rx = 1;              // idle high
+  wire tx;
+  wire rx_valid;
+  wire [7:0] rx_data;
 
-  // Instantiate your UART
+  // Instantiate your uart (echo back received byte)
   uart #(
     .CLOCK_FREQ(CLK_FREQ),
     .BAUD_RATE (BAUD_RATE)
-  ) dut (
-    .clk      (clk),
-    .rst      (rst),
-    .rx       (rx),
-    .tx       (tx),
-    .rx_valid (rx_valid),
-    .rx_data  (rx_data),
-    .tx_data  (tx_data),
-    .tx_start (tx_start),
-    .tx_busy  (tx_busy)
+  ) uut (
+    .clk       (clk),
+    .rst       (rst),
+    .rx        (rx),
+    .rx_valid  (rx_valid),
+    .rx_data   (rx_data),
+    .tx_data   (rx_data),
+    .tx_start  (rx_valid),
+    .tx        (tx),
+    .tx_busy   ()
   );
 
+  // 50 MHz clock: period = 20 ns
+  always #10 clk = ~clk;
+
   initial begin
-    // Release reset
+    #50 rst = 0;        // release reset
+  end
+
+  // Send one byte (0xA5) then finish
+  initial begin
+    @(negedge rst);
     #100;
-    rst = 0;
-    
-    // Drive an RX frame: send 0x5A (?01011010?) LSB first
-    send_byte(8'h5A);
-
-    // Wait, then start a TX via tx_start
-    #1000;
-    tx_data  = 8'hA5;   // echo pattern
-    tx_start = 1;
-    #20;
-    tx_start = 0;
-
-    // Let it finish
-    #(BIT_TIME*12);
-
-    $display("RX valid: %b, data = %02X", rx_valid, rx_data);
+    send_byte(8'hA5);
+    # (BIT_TIME * 20);
     $finish;
   end
 
-  // Task to bit-bang RX
+  // Task to drive serial IN on rx line
   task send_byte(input [7:0] b);
     integer i;
     begin
-      // start bit
-      rx = 0;
+      rx = 0;            // start bit
       #(BIT_TIME);
-      // data bits
       for (i = 0; i < 8; i = i + 1) begin
         rx = b[i];
         #(BIT_TIME);
       end
-      // stop bit
-      rx = 1;
+      rx = 1;            // stop bit
       #(BIT_TIME);
     end
   endtask
 
-  // Monitor TX and reconstruct transmitted byte
-  reg [7:0] rx_shift;
-  integer   bit_cnt;
-  initial begin
-    @(negedge tx);           // detect start bit
-    # (BIT_TIME + BIT_TIME/2);
-    for (bit_cnt = 0; bit_cnt < 8; bit_cnt = bit_cnt + 1) begin
-      rx_shift[bit_cnt] = tx;
-      #BIT_TIME;
+  // Print received data
+  always @(posedge clk) begin
+    if (rx_valid) begin
+      $display("Time %0t: Received 0x%02h", $time, rx_data);
     end
-    #BIT_TIME;
-    $display("Transmitted byte: %02X", rx_shift);
   end
 
 endmodule
