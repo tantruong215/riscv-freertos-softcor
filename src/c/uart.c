@@ -1,24 +1,67 @@
-#include "uart.h"
+#include "ringbuf.h"
+#include "uart.h"    // hardware regs & IRQ flags
+#include "FreeRTOS.h"
+#include "task.h"
 
-/* Match these to the base-address your top-level assigns. */
-#define UART_BASE    0x10000000UL
-#define UART_DATA    (*(volatile uint8_t*)(UART_BASE + 0x00))
-#define UART_STATUS  (*(volatile uint8_t*)(UART_BASE + 0x04))
-#define UART_CTRL    (*(volatile uint8_t*)(UART_BASE + 0x08))
+static RingBuf_t    uartRx, uartTx;
+static TaskHandle_t xRxTaskHandle = NULL;
 
-void uart_init(void) {
-    /* Example: enable RX and TX (your CTRL bit-fields may differ) */
-    UART_CTRL = 0x01;
+void UART_Init(void) {
+    RingBuf_Init(&uartRx);
+    RingBuf_Init(&uartTx);
+
+    // Configure baud, parity, etc.
+    UART->INT_EN = UART_RX_INT;    // enable RX IRQ
 }
 
-void uart_putc(uint8_t c) {
-    /* Wait until TX is free (status bit 0 == 0) */
-    while (UART_STATUS & 0x01) { }
-    UART_DATA = c;
+void UART_IRQHandler(void) {
+    uint32_t st = UART->STATUS;
+
+    // RX ready?
+    if (st & UART_RX_INT) {
+        uint8_t b = UART->DATA;
+        uint16_t next = RingBuf_Next(uartRx.head);
+        if (next != uartRx.tail) {
+            uartRx.buffer[uartRx.head] = b;
+            uartRx.head = next;
+        } else {
+            uartRx.overflow = true;
+        }
+        // notify task that data is ready
+        if (xRxTaskHandle) {
+            BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+            vTaskNotifyGiveFromISR(xRxTaskHandle, &xHigherPriorityTaskWoken);
+            portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+        }
+    }
+
+    // TX ready?
+    if ((st & UART_TX_READY) && !RingBuf_IsEmpty(&uartTx)) {
+        UART->DATA = uartTx.buffer[uartTx.tail];
+        uartTx.tail = RingBuf_Next(uartTx.tail);
+        if (RingBuf_IsEmpty(&uartTx)) {
+            UART->INT_EN &= ~UART_TX_INT;  // disable TX IRQ until next send
+        }
+    }
 }
 
-uint8_t uart_getc(void) {
-    /* Wait until RX ready (status bit 1 == 1) */
-    while (!(UART_STATUS & 0x02)) { }
-    return UART_DATA;
+bool UART_SendByte(uint8_t b) {
+    uint16_t next = RingBuf_Next(uartTx.head);
+    if (next == uartTx.tail) return false;  // full
+    uartTx.buffer[uartTx.head] = b;
+    uartTx.head = next;
+    UART->INT_EN |= UART_TX_INT;            // enable TX IRQ
+    return true;
+}
+
+int UART_ReceiveByte(void) {
+    if (RingBuf_IsEmpty(&uartRx)) return -1;
+    uint8_t b = uartRx.buffer[uartRx.tail];
+    uartRx.tail = RingBuf_Next(uartRx.tail);
+    return b;
+}
+
+// To link a FreeRTOS task to RX notifications:
+void UART_RegisterRxTask(TaskHandle_t handle) {
+    xRxTaskHandle = handle;
 }

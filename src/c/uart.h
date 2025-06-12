@@ -1,21 +1,16 @@
-#ifndef UART_H
-#define UART_H
-
-#include <stdint.h>
-
-/**
- * @brief  Initialize the UART peripheral (baud rate, enable RX/TX).
- */
-void uart_init(void);
-
-/**
- * @brief  Transmit one character (blocks if UART busy).
- */
-void uart_putc(uint8_t c);
-
-/**
- * @brief  Receive one character (blocks until data available).
- */
-uint8_t uart_getc(void);
-
-#endif // UART_H
+#define RX_BUF_SIZE  128
+#define TX_BUF_SIZE  128
+typedef struct {
+    uint8_t buffer[RX_BUF_SIZE];
+    volatile uint16_t head;
+    volatile uint16_t tail;
+} RingBuffer;
+extern RingBuffer uart_rx_buf, uart_tx_buf;
+typedef struct {
+    uint8_t      buffer[RX_BUF_SIZE];
+    volatile uint16_t head, tail;
+    volatile bool    overflow;      // new flag
+} RingBuffer;
+bool RingBuffer_HasOverflow(RingBuffer *rb);
+void RingBuffer_ClearOverflow(RingBuffer *rb);
+extern RingBuffer uart_rx_buf, uart_tx_buf;
