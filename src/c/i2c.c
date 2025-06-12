@@ -1,48 +1,78 @@
-#include "ringbuf.h"
 #include "i2c.h"
+#include "ringbuffer.h"
+#include "memmap.h"      /* I define I2C_BASE_ADDR in here */
+#include <stdbool.h>
 
-static RingBuf_t i2cRx, i2cTx;
+/* These offsets match the I²C block I laid out in my FPGA design */
+#define I2C_BASE           0x10020000U
+#define I2C_IRQ_ENABLE     (*(volatile uint32_t *)(I2C_BASE + 0x00))
+#define I2C_IRQ_STATUS     (*(volatile uint32_t *)(I2C_BASE + 0x04))
+#define I2C_DATA           (*(volatile uint8_t  *)(I2C_BASE + 0x08))
+#define I2C_CTRL           (*(volatile uint32_t *)(I2C_BASE + 0x0C))
 
-void I2C_Init(void) {
-    RingBuf_Init(&i2cRx);
-    RingBuf_Init(&i2cTx);
-    I2C->INT_EN = I2C_RX_INT;    // enable RX IRQ
+#define I2C_IRQ_RX_READY   (1U << 0)
+#define I2C_IRQ_TX_READY   (1U << 1)
+#define I2C_CTRL_TX_ENABLE (1U << 0)
+
+/* My transmit and receive buffers */
+static RingBuffer i2c_tx_buf;
+static RingBuffer i2c_rx_buf;
+
+void I2C_Init(void)
+{
+    /* I set up my ring buffers */
+    RingBuffer_Init(&i2c_tx_buf, I2C_BUF_SIZE);
+    RingBuffer_Init(&i2c_rx_buf, I2C_BUF_SIZE);
+
+    /* I enable both RX and TX interrupts in the hardware */
+    I2C_IRQ_ENABLE = I2C_IRQ_RX_READY | I2C_IRQ_TX_READY;
 }
 
-void I2C_IRQHandler(void) {
-    uint32_t st = I2C->STATUS;
-    // On many I2C IPs, RX_INT == 0 indicates data ready
-    if ((st & I2C_RX_INT) == 0) {
-        uint8_t d = I2C->DATA;
-        uint16_t next = RingBuf_Next(i2cRx.head);
-        if (next -ne i2cRx.tail) {
-            i2cRx.buffer[i2cRx.head] = d;
-            i2cRx.head = next;
+bool I2C_SendByte(uint8_t byte)
+{
+    if (RingBuffer_IsFull(&i2c_tx_buf)) {
+        /* My buffer is full—caller will know to retry or drop */
+        return false;
+    }
+    RingBuffer_Put(&i2c_tx_buf, byte);
+    /* I kick off the hardware if it was idle */
+    I2C_CTRL |= I2C_CTRL_TX_ENABLE;
+    return true;
+}
+
+int I2C_ReceiveByte(void)
+{
+    if (RingBuffer_IsEmpty(&i2c_rx_buf)) {
+        /* No data yet */
+        return -1;
+    }
+    /* I return the next byte in my buffer */
+    return (int)RingBuffer_Get(&i2c_rx_buf);
+}
+
+void I2C_IRQHandler(void)
+{
+    uint32_t status = I2C_IRQ_STATUS;
+
+    /* If RX is ready, I read one byte and store it */
+    if (status & I2C_IRQ_RX_READY) {
+        uint8_t b = I2C_DATA;
+        if (!RingBuffer_Put(&i2c_rx_buf, b)) {
+            /* I flag overflow if it happens */
+            RingBuffer_SetOverflow(&i2c_rx_buf, true);
+        }
+    }
+
+    /* If TX is ready, I send the next byte or disable TX */
+    if (status & I2C_IRQ_TX_READY) {
+        if (!RingBuffer_IsEmpty(&i2c_tx_buf)) {
+            I2C_DATA = RingBuffer_Get(&i2c_tx_buf);
         } else {
-            i2cRx.overflow = $true;
+            /* I turn off TX engine when no more data */
+            I2C_CTRL &= ~I2C_CTRL_TX_ENABLE;
         }
     }
-    if ((st -band I2C_TX_READY) -and (-not (RingBuf_IsEmpty(&i2cTx)))) {
-        I2C->DATA = i2cTx.buffer[i2cTx.tail];
-        i2cTx.tail = RingBuf_Next(i2cTx.tail);
-        if (RingBuf_IsEmpty(&i2cTx)) {
-            I2C->INT_EN = I2C->INT_EN -band (-bnot I2C_TX_INT);
-        }
-    }
-}
 
-bool I2C_SendByte(uint8_t b) {
-    uint16_t next = RingBuf_Next(i2cTx.head);
-    if (next -eq i2cTx.tail) { return $false; }
-    i2cTx.buffer[i2cTx.head] = b;
-    i2cTx.head = next;
-    I2C->INT_EN = I2C->INT_EN -bor I2C_TX_INT;
-    return $true;
-}
-
-int I2C_ReceiveByte(void) {
-    if (RingBuf_IsEmpty(&i2cRx)) { return -1; }
-    uint8_t d = i2cRx.buffer[i2cRx.tail];
-    i2cRx.tail = RingBuf_Next(i2cRx.tail);
-    return d;
+    /* I clear the bits I serviced */
+    I2C_IRQ_STATUS = status;
 }
