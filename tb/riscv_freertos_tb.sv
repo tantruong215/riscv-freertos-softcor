@@ -1,125 +1,85 @@
+// tb/riscv_freertos_tb.sv
 `timescale 1ns/1ps
 
 module riscv_freertos_tb;
 
-  // Clock and reset
+  // Clock & reset
   reg clk = 0;
   reg rst_n = 0;
-  always #10 clk = ~clk; // 50 MHz
 
-  // SPI signals
-  reg spi_sclk = 0;
-  reg spi_mosi = 0;
-  wire spi_miso;
-  reg spi_cs_n = 1;
-
-  // UART signals
-  reg uart_rx = 1;
+  // UART lines
   wire uart_tx;
+  reg  uart_rx = 1;
 
-  // Machine-timer registers (via DPI or direct regs)
-  // Model mtime and mtimecmp as regs
-  reg [63:0] mtime = 0;
-  reg [63:0] mtimecmp = 64'hFFFF_FFFF_FFFF_FFFF;
+  // LED bus
+  wire [7:0] led;
 
-  // DUT instantiation
-  top dut (
-    .clk(clk),
-    .rst_n(rst_n),
-    // SPI
-    .spi_sclk(spi_sclk),
-    .spi_mosi(spi_mosi),
-    .spi_miso(spi_miso),
-    .spi_cs_n(spi_cs_n),
-    // UART
-    .uart_rx(uart_rx),
-    .uart_tx(uart_tx),
-    // Timer
-    .mtime(mtime),
-    .mtimecmp(mtimecmp)
+  // Memory model parameters
+  localparam MEM_DEPTH = 16384;
+  localparam ADDR_WIDTH = $clog2(MEM_DEPTH);
+
+  //––––––––––––––– DUT –––––––––––––––//
+  top uut (
+    .clk      (clk),
+    .rst      (~rst_n),
+    .uart_rx  (uart_rx),
+    .uart_tx  (uart_tx),
+    .led      (led)
   );
 
-  // Monitor variables
-  time tick_time;
-  time irq_trigger_time;
-  time context_switch_time;
+  //––––––––––––––– Simple RAM –––––––––––––––//
+  reg [31:0] ram [0:MEM_DEPTH-1];
+  reg [31:0] rdata;
 
-  // Generate reset
+  // Load firmware into RAM at time 0
   initial begin
-    rst_n = 0;
-    #100;
-    rst_n = 1;
+    $readmemh("../tb/firmware.mem", ram);
   end
 
-  // Simulate machine-timer increment
+  // Memory interface hooking (picoRV32 uses synchronous RAM)
+  always_ff @(posedge clk) begin
+    if (uut.mem_valid && |uut.mem_wstrb) begin
+      // write bytes
+      for (int i = 0; i < 4; i++) begin
+        if (uut.mem_wstrb[i])
+          ram[uut.mem_addr[ADDR_WIDTH+1:2]][8*i +: 8] <= uut.mem_wdata[8*i +: 8];
+      end
+      rdata <= uut.mem_wdata;  // write-through
+    end else begin
+      rdata <= ram[uut.mem_addr[ADDR_WIDTH+1:2]];
+    end
+  end
+
+  assign uut.mem_rdata  = rdata;
+  assign uut.mem_ready  = 1'b1;
+
+  //––––––––––––––– Clock & Reset –––––––––––––––//
+  always #10 clk = ~clk;  // 50 MHz
+
+  initial begin
+    // Hold reset low for 5 cycles
+    #50 rst_n = 1;
+  end
+
+  //––––––––––––––– UART Monitor –––––––––––––––//
+  integer uart_file;
+  initial begin
+    uart_file = $fopen("uart_output.log", "w");
+    if (!uart_file) $error("Failed to open uart_output.log");
+  end
+
   always @(posedge clk) begin
-    if (rst_n)
-      mtime <= mtime + 1;
-  end
-
-  // Fire mtimer interrupt every 1000 cycles (1 kHz)
-  initial begin
-    @(posedge rst_n);
-    forever begin
-      // schedule next compare
-      @(posedge clk);
-      mtimecmp <= mtime + 1000;
-      irq_trigger_time = $time;
-      // wait for interrupt context switch to complete
-      wait(dut.ported && dut.switched); // replace with actual flags
-      context_switch_time = $time - irq_trigger_time;
-      $display("Context-switch latency: %0t ns", context_switch_time);
-      #1000000;
+    if (uut.uart_tx_valid) begin
+      // ascii byte on uart_tx_data
+      $fwrite(uart_file, "%c", uut.uart_tx_data);
     end
   end
 
-  // SPI stimulus
+  //––––––––––––––– Simulation Stop –––––––––––––––//
   initial begin
-    @(posedge rst_n);
-    #500;
-    forever begin
-      spi_cs_n = 0;
-      repeat (8) begin
-        spi_sclk = 0; #10;
-        spi_mosi = $random;
-        spi_sclk = 1; #10;
-      end
-      spi_cs_n = 1;
-      #10000;
-    end
-  end
-
-  // UART RX stimulus: echo 'A' every 20000 ns
-  task send_uart(input [7:0] data);
-    integer i;
-    integer bit_time = 50000000/115200;
-    begin
-      // start bit
-      uart_rx = 0;
-      #(bit_time);
-      // data bits
-      for (i=0; i<8; i=i+1) begin
-        uart_rx = data[i];
-        #(bit_time);
-      end
-      // stop bit
-      uart_rx = 1;
-      #(bit_time);
-    end
-  endtask
-
-  initial begin
-    @(posedge rst_n);
-    #10000;
-    forever begin
-      send_uart(8'h41);
-      #20000;
-    end
-  end
-
-  // End simulation
-  initial begin
-    #200_000_000;
+    // run for 10 ms
+    #10_000_000;
+    $display("Simulation complete. UART output in uart_output.log");
     $finish;
   end
 
