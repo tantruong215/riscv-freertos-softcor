@@ -2,43 +2,43 @@
 #define PORTMACRO_H
 
 #include <stdint.h>
+#include "FreeRTOSConfig.h"  /* for configTICK_RATE_HZ */
 
-#define portCHAR        char
-#define portFLOAT       float
-#define portDOUBLE      double
-#define portLONG        long
-#define portSHORT       short
-#define portSTACK_TYPE  uint32_t
-#define portBASE_TYPE   long
-
+/* Type definitions */
+#define portSTACK_TYPE    uint32_t
+#define portBASE_TYPE     long
 typedef portSTACK_TYPE StackType_t;
 typedef long BaseType_t;
 typedef unsigned long UBaseType_t;
 
-#define portSTACK_GROWTH            ( -1 )
-#define portTICK_PERIOD_MS          ( ( TickType_t ) 1000 / configTICK_RATE_HZ )
-#define portBYTE_ALIGNMENT          8
+/* Architecture specifics */
+#define portSTACK_GROWTH          (-1)
+#define portBYTE_ALIGNMENT        8
+#define portTICK_PERIOD_MS        ( 1000U / configTICK_RATE_HZ )
 
-#define portENTER_CRITICAL()     __asm volatile( "csrci mstatus, 8" ::: "memory" )
-#define portEXIT_CRITICAL()      __asm volatile( "csrsi mstatus, 8" ::: "memory" )
-#define portYIELD()              __asm volatile( "ecall" ::: "memory" )
-#define portDISABLE_INTERRUPTS() __asm volatile( "csrci mstatus, 8" ::: "memory" )
-#define portENABLE_INTERRUPTS()  __asm volatile( "csrsi mstatus, 8" ::: "memory" )
+/* Critical sections */
+#define portENTER_CRITICAL()     __asm volatile("csrci mstatus, 8" ::: "memory")
+#define portEXIT_CRITICAL()      __asm volatile("csrsi mstatus, 8" ::: "memory")
 
+/* Yield */
+#define portYIELD()              __asm volatile("ecall" ::: "memory")
+#define portDISABLE_INTERRUPTS() __asm volatile("csrci mstatus, 8" ::: "memory")
+#define portENABLE_INTERRUPTS()  __asm volatile("csrsi mstatus, 8" ::: "memory")
+
+/* Tick type */
 #if ( configUSE_16_BIT_TICKS == 1 )
-    typedef uint16_t TickType_t;
-    #define portMAX_DELAY ( TickType_t ) 0xffff
+  typedef uint16_t TickType_t;
+  #define portMAX_DELAY ( TickType_t )0xFFFF
 #else
-    typedef uint32_t TickType_t;
-    #define portMAX_DELAY ( TickType_t ) 0xffffffffUL
+  typedef uint32_t TickType_t;
+  #define portMAX_DELAY ( TickType_t )0xFFFFFFFFUL
 #endif
 
-extern void vPortStartFirstTask( void );
-extern void vPortYield( void );
-#define FreeRTOS_Tick_Handler MachineTimer_IRQHandler
+/* Scheduler utilities */
+extern void vPortStartFirstTask(void);
+extern void vPortYield(void);
+
+/* Map the FreeRTOS tick handler to our machine-timer IRQ */
+#define FreeRTOS_Tick_Handler    MachineTimer_IRQHandler
 
 #endif /* PORTMACRO_H */
-#define MTIME       (*(volatile uint64_t*)0x0200BFF8)
-#define MTIMECMP    (*(volatile uint64_t*)0x02004000)
-#define TICK_RATE_HZ 1000UL
-extern void xPortSysTickHandler(void);

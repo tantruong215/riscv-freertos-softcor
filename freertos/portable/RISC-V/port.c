@@ -1,69 +1,55 @@
 ﻿#include "FreeRTOS.h"
 #include "task.h"
 #include "portmacro.h"
+#include "memmap.h"   /* for MTIME and MTIMECMP */
 
-#define CLINT_BASE       0x02000000UL
-#define MTIMECMP_OFFSET  0x4000
-#define MTIME_OFFSET     0xBFF8UL
+static void prvSetupTimerInterrupt(void);
 
-volatile uint64_t * const mtime    = (uint64_t*)(CLINT_BASE + MTIME_OFFSET);
-volatile uint64_t * const mtimecmp = (uint64_t*)(CLINT_BASE + MTIMECMP_OFFSET);
-
-void FreeRTOS_Tick_Handler( void );
-static void prvSetupTimerInterrupt( void );
-
-BaseType_t xPortStartScheduler( void )
+/* Called by main to start the scheduler */
+BaseType_t xPortStartScheduler(void)
 {
     prvSetupTimerInterrupt();
     vPortStartFirstTask();
     return 0;
 }
 
-static void prvSetupTimerInterrupt( void )
+/* Configure the machine-timer to generate the RTOS tick */
+static void prvSetupTimerInterrupt(void)
 {
-    uint64_t ticks = configCPU_CLOCK_HZ / configTICK_RATE_HZ;
-    *mtimecmp = *mtime + ticks;
-    __asm volatile( "csrsi mie, 0x80" );
-    __asm volatile( "csrsi mstatus, 0x8" );
+    const uint64_t ticks = configCPU_CLOCK_HZ / configTICK_RATE_HZ;
+    MTIMECMP = MTIME + ticks;
+
+    /* Enable machine-timer interrupt (bit 7 in MIE) */
+    __asm volatile("csrsi mie, %0" :: "r"(1 << 7));
+    /* Globally enable interrupts (MSTATUS.MIE bit) */
+    __asm volatile("csrsi mstatus, %0" :: "i"(1 << 3));
 }
 
-void FreeRTOS_Tick_Handler( void )
+/* Called on each tick—reschedules if higher-priority task is ready */
+void FreeRTOS_Tick_Handler(void)
 {
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-    uint64_t ticks = configCPU_CLOCK_HZ / configTICK_RATE_HZ;
-    *mtimecmp += ticks;
-    if( xTaskIncrementTick() != pdFALSE )
+    const uint64_t ticks = configCPU_CLOCK_HZ / configTICK_RATE_HZ;
+    MTIMECMP += ticks;
+
+    if (xTaskIncrementTick() != pdFALSE)
     {
         xHigherPriorityTaskWoken = pdTRUE;
     }
-    if( xHigherPriorityTaskWoken != pdFALSE )
+    if (xHigherPriorityTaskWoken != pdFALSE)
     {
         portYIELD();
     }
 }
 
-void vPortYield( void )
+/* Trigger a context switch from software */
+void vPortYield(void)
 {
-    __asm volatile( "ecall" );
+    __asm volatile("ecall" ::: "memory");
 }
 
-void vPortEndScheduler( void )
+/* Not supported */
+void vPortEndScheduler(void)
 {
     for( ;; );
-}
-void vPortSetupTimerInterrupt(void) {
-    uint64_t now = MTIME;
-    MTIMECMP = now + (configCPU_CLOCK_HZ / TICK_RATE_HZ);
-    __asm volatile(\"csrs mie, %0\" :: \"r\"(1 << 7));
-}
-/* PLIC setup */
-#define PLIC_THRESHOLD      ((volatile uint32_t*)0x0C000000)
-#define PLIC_PRIORITY_BASE  ((volatile uint32_t*)0x0C001000)
-#define PLIC_ENABLE_BASE    ((volatile uint32_t*)0x0C002000)
-void PLIC_Init(void) {
-    *PLIC_THRESHOLD = 0;
-    PLIC_PRIORITY_BASE[7] = 3;   // Machine-timer
-    PLIC_PRIORITY_BASE[10] = 1;  // UART
-    // set SPI, I2C similarly...
-    PLIC_ENABLE_BASE[0] |= (1<<7) | (1<<10);  
 }
