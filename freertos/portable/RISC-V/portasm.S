@@ -1,191 +1,176 @@
-    /*
-     * portASM.S - RISC-V FreeRTOS port assembly stubs
-     * Implements context save and restore for task switching.
-     */
-
     .section .text
     .align 2
-<<<<<<< HEAD
+
+    .extern xPortSysTickHandler       /* FreeRTOS tick handler */
+    .extern vPortYield               /* PendSV-style yield */
 
     .global portSAVE_CONTEXT
 portSAVE_CONTEXT:
-    /* a0 holds pointer to TCB's stack pointer storage */
-    /* Make room for 34 words: x1-x31 (31) + mstatus (1) + return address (1) */
-    addi    sp, sp, -4*34
+    /* a0 = pointer to current TCB */
+    addi  sp, sp, -4 * 34            /* make room for x1?x31 + mstatus */
+    sw    ra,  0(sp)
+    sw    t0,  4(sp)
+    sw    t1,  8(sp)
+    sw    t2,  12(sp)
+    sw    t3,  16(sp)
+    sw    t4,  20(sp)
+    sw    t5,  24(sp)
+    sw    t6,  28(sp)
+    sw    a0,  32(sp)                /* preserve original a0 slot */
+    sw    a1,  36(sp)
+    sw    a2,  40(sp)
+    sw    a3,  44(sp)
+    sw    a4,  48(sp)
+    sw    a5,  52(sp)
+    sw    a6,  56(sp)
+    sw    a7,  60(sp)
+    sw    s0,  64(sp)
+    sw    s1,  68(sp)
+    sw    s2,  72(sp)
+    sw    s3,  76(sp)
+    sw    s4,  80(sp)
+    sw    s5,  84(sp)
+    sw    s6,  88(sp)
+    sw    s7,  92(sp)
+    sw    s8,  96(sp)
+    sw    s9,  100(sp)
+    sw    s10, 104(sp)
+    sw    s11, 108(sp)
+    sw    gp,  112(sp)
+    sw    tp,  116(sp)
 
-    /* Save return address and temporaries */
-    sw      ra,   0(sp)
-    sw      t0,   4(sp)
-    sw      t1,   8(sp)
-    sw      t2,  12(sp)
-    sw      t3,  16(sp)
-    sw      t4,  20(sp)
-    sw      t5,  24(sp)
-    sw      t6,  28(sp)
+    /* Save mstatus */
+    csrr  t0, mstatus
+    sw    t0, 120(sp)
 
-    /* Save argument and saved registers */
-    sw      a0,  32(sp)
-    sw      a1,  36(sp)
-    sw      a2,  40(sp)
-    sw      a3,  44(sp)
-    sw      a4,  48(sp)
-    sw      a5,  52(sp)
-    sw      a6,  56(sp)
-    sw      a7,  60(sp)
-    sw      s0,  64(sp)
-    sw      s1,  68(sp)
-    sw      s2,  72(sp)
-    sw      s3,  76(sp)
-    sw      s4,  80(sp)
-    sw      s5,  84(sp)
-    sw      s6,  88(sp)
-    sw      s7,  92(sp)
-    sw      s8,  96(sp)
-    sw      s9, 100(sp)
-    sw     s10, 104(sp)
-    sw     s11, 108(sp)
-
-    /* Save mstatus CSR */
-    csrr    t0, mstatus
-    sw      t0, 112(sp)
-
-    /* Store new SP into TCB: *(a0) = sp */
-    sw      sp, 116(a0)
-=======
-    .global portSAVE_CONTEXT
-portSAVE_CONTEXT:
-    /* a0 = pointer to TCB?s SP storage */
-    addi    sp, sp, -4*34         /* make room for x1?x31 + mstatus + return addr */
-
-    /* 1) Save return address & temporaries */
-    sw      ra,    0(sp)
-    sw      t0,    4(sp)
-    sw      t1,    8(sp)
-    sw      t2,    12(sp)
-    sw      t3,    16(sp)
-    sw      t4,    20(sp)
-    sw      t5,    24(sp)
-    sw      t6,    28(sp)
-
-    /* 2) Save argument and saved registers */
-    sw      a0,    32(sp)
-    sw      a1,    36(sp)
-    sw      a2,    40(sp)
-    sw      a3,    44(sp)
-    sw      a4,    48(sp)
-    sw      a5,    52(sp)
-    sw      a6,    56(sp)
-    sw      a7,    60(sp)
-    sw      s0,    64(sp)
-    sw      s1,    68(sp)
-    sw      s2,    72(sp)
-    sw      s3,    76(sp)
-    sw      s4,    80(sp)
-    sw      s5,    84(sp)
-    sw      s6,    88(sp)
-    sw      s7,    92(sp)
-    sw      s8,    96(sp)
-    sw      s9,    100(sp)
-    sw      s10,   104(sp)
-    sw      s11,   108(sp)
-
-    /* 3) Save mstatus CSR */
-    csrr    t0, mstatus
-    sw      t0,   112(sp)
-
-    /* 4) Update TCB with new SP */
-    sw      sp,   116(a0)
->>>>>>> f2c804f (Add MachineTimer_IRQHandler in timer.c, init_traps() in main.c, and overwrite portASM.S)
+    /* Store new SP into TCB */
+    sw    sp, 0(a0)
     ret
 
     .global portRESTORE_CONTEXT
 portRESTORE_CONTEXT:
-<<<<<<< HEAD
-    /* a0 holds pointer to TCB's stack pointer storage */
-    /* Load SP from TCB */
-    lw      sp, 116(a0)
+    /* a0 = pointer to current TCB */
+    lw    sp, 0(a0)
 
-    /* Restore mstatus CSR */
-    lw      t0, 112(sp)
-    csrw    mstatus, t0
+    /* Restore mstatus */
+    lw    t0, 120(sp)
+    csrw  mstatus, t0
 
-    /* Restore saved registers in reverse order */
-    lw     s11, 108(sp)
-    lw     s10, 104(sp)
-    lw      s9, 100(sp)
-    lw      s8,  96(sp)
-    lw      s7,  92(sp)
-    lw      s6,  88(sp)
-    lw      s5,  84(sp)
-    lw      s4,  80(sp)
-    lw      s3,  76(sp)
-    lw      s2,  72(sp)
-    lw      s1,  68(sp)
-    lw      s0,  64(sp)
-    lw      a7,  60(sp)
-    lw      a6,  56(sp)
-    lw      a5,  52(sp)
-    lw      a4,  48(sp)
-    lw      a3,  44(sp)
-    lw      a2,  40(sp)
-    lw      a1,  36(sp)
-    lw      a0,  32(sp)
-    lw      t6,  28(sp)
-    lw      t5,  24(sp)
-    lw      t4,  20(sp)
-    lw      t3,  16(sp)
-    lw      t2,  12(sp)
-    lw      t1,   8(sp)
-    lw      t0,   4(sp)
-    lw      ra,   0(sp)
+    /* Restore all GPRs in reverse order */
+    lw    ra,  0(sp)
+    lw    t0,  4(sp)
+    lw    t1,  8(sp)
+    lw    t2,  12(sp)
+    lw    t3,  16(sp)
+    lw    t4,  20(sp)
+    lw    t5,  24(sp)
+    lw    t6,  28(sp)
+    lw    a0,  32(sp)
+    lw    a1,  36(sp)
+    lw    a2,  40(sp)
+    lw    a3,  44(sp)
+    lw    a4,  48(sp)
+    lw    a5,  52(sp)
+    lw    a6,  56(sp)
+    lw    a7,  60(s
+# PowerShell snippet to overwrite your portASM.S with the full context save/restore stubs
+$file = "freertos/portable/RISC-V/portasm.S"
 
-    /* Restore SP to original position */
-    addi    sp, sp, 4*34
+@'
+    .section .text
+    .align 2
 
-    /* Return from trap */
-    mret
+    .extern xPortSysTickHandler       /* FreeRTOS tick handler */
+    .extern vPortYield               /* PendSV-style yield */
 
-=======
-    /* a0 = pointer to TCB?s SP storage */
-    lw      sp,    116(a0)        /* restore SP */
+    .global portSAVE_CONTEXT
+portSAVE_CONTEXT:
+    /* a0 = pointer to current TCB */
+    addi  sp, sp, -4 * 34            /* make room for x1?x31 + mstatus */
+    sw    ra,  0(sp)
+    sw    t0,  4(sp)
+    sw    t1,  8(sp)
+    sw    t2,  12(sp)
+    sw    t3,  16(sp)
+    sw    t4,  20(sp)
+    sw    t5,  24(sp)
+    sw    t6,  28(sp)
+    sw    a0,  32(sp)                /* preserve original a0 slot */
+    sw    a1,  36(sp)
+    sw    a2,  40(sp)
+    sw    a3,  44(sp)
+    sw    a4,  48(sp)
+    sw    a5,  52(sp)
+    sw    a6,  56(sp)
+    sw    a7,  60(sp)
+    sw    s0,  64(sp)
+    sw    s1,  68(sp)
+    sw    s2,  72(sp)
+    sw    s3,  76(sp)
+    sw    s4,  80(sp)
+    sw    s5,  84(sp)
+    sw    s6,  88(sp)
+    sw    s7,  92(sp)
+    sw    s8,  96(sp)
+    sw    s9,  100(sp)
+    sw    s10, 104(sp)
+    sw    s11, 108(sp)
+    sw    gp,  112(sp)
+    sw    tp,  116(sp)
 
-    /* 1) Restore mstatus CSR */
-    lw      t0,    112(sp)
-    csrw    mstatus, t0
+    /* Save mstatus */
+    csrr  t0, mstatus
+    sw    t0, 120(sp)
 
-    /* 2) Restore saved registers (reverse order) */
-    lw      s11,   108(sp)
-    lw      s10,   104(sp)
-    lw      s9,    100(sp)
-    lw      s8,     96(sp)
-    lw      s7,     92(sp)
-    lw      s6,     88(sp)
-    lw      s5,     84(sp)
-    lw      s4,     80(sp)
-    lw      s3,     76(sp)
-    lw      s2,     72(sp)
-    lw      s1,     68(sp)
-    lw      s0,     64(sp)
-    lw      a7,     60(sp)
-    lw      a6,     56(sp)
-    lw      a5,     52(sp)
-    lw      a4,     48(sp)
-    lw      a3,     44(sp)
-    lw      a2,     40(sp)
-    lw      a1,     36(sp)
-    lw      a0,     32(sp)
-    lw      t6,     28(sp)
-    lw      t5,     24(sp)
-    lw      t4,     20(sp)
-    lw      t3,     16(sp)
-    lw      t2,     12(sp)
-    lw      t1,      8(sp)
-    lw      t0,      4(sp)
-    lw      ra,      0(sp)
+    /* Store new SP into TCB */
+    sw    sp, 0(a0)
+    ret
 
-    /* 3) Restore SP */
-    addi    sp, sp, 4*34
+    .global portRESTORE_CONTEXT
+portRESTORE_CONTEXT:
+    /* a0 = pointer to current TCB */
+    lw    sp, 0(a0)
 
-    /* 4) Return to task via mret */
-    mret
->>>>>>> f2c804f (Add MachineTimer_IRQHandler in timer.c, init_traps() in main.c, and overwrite portASM.S)
+    /* Restore mstatus */
+    lw    t0, 120(sp)
+    csrw  mstatus, t0
+
+    /* Restore all GPRs in reverse order */
+    lw    ra,  0(sp)
+    lw    t0,  4(sp)
+    lw    t1,  8(sp)
+    lw    t2,  12(sp)
+    lw    t3,  16(sp)
+    lw    t4,  20(sp)
+    lw    t5,  24(sp)
+    lw    t6,  28(sp)
+    lw    a0,  32(sp)
+    lw    a1,  36(sp)
+    lw    a2,  40(sp)
+    lw    a3,  44(sp)
+    lw    a4,  48(sp)
+    lw    a5,  52(sp)
+    lw    a6,  56(sp)
+    lw    a7,  60(sp)
+    lw    s0,  64(sp)
+    lw    s1,  68(sp)
+    lw    s2,  72(sp)
+    lw    s3,  76(sp)
+    lw    s4,  80(sp)
+    lw    s5,  84(sp)
+    lw    s6,  88(sp)
+    lw    s7,  92(sp)
+    lw    s8,  96(sp)
+    lw    s9,  100(sp)
+    lw    s10, 104(sp)
+    lw    s11, 108(sp)
+    lw    gp,  112(sp)
+    lw    tp,  116(sp)
+
+    addi  sp, sp, 4 * 34
+    ret
+
+/* In your mtimer trap handler (e.g. trap.S):
+   call xPortSysTickHandler
+   mret
+*/
