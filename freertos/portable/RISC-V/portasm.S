@@ -7,7 +7,7 @@
     .global portSAVE_CONTEXT
 portSAVE_CONTEXT:
     /* a0 = pointer to current TCB */
-    addi  sp, sp, -4 * 34            /* make room for x1?x31 + mstatus */
+    addi  sp, sp, -4 * 34            /* make room for x1–x31 + mstatus */
     sw    ra,  0(sp)
     sw    t0,  4(sp)
     sw    t1,  8(sp)
@@ -45,6 +45,7 @@ portSAVE_CONTEXT:
 
     /* Store new SP into TCB */
     sw    sp, 0(a0)
+
     ret
 
     .global portRESTORE_CONTEXT
@@ -56,86 +57,7 @@ portRESTORE_CONTEXT:
     lw    t0, 120(sp)
     csrw  mstatus, t0
 
-    /* Restore all GPRs in reverse order */
-    lw    ra,  0(sp)
-    lw    t0,  4(sp)
-    lw    t1,  8(sp)
-    lw    t2,  12(sp)
-    lw    t3,  16(sp)
-    lw    t4,  20(sp)
-    lw    t5,  24(sp)
-    lw    t6,  28(sp)
-    lw    a0,  32(sp)
-    lw    a1,  36(sp)
-    lw    a2,  40(sp)
-    lw    a3,  44(sp)
-    lw    a4,  48(sp)
-    lw    a5,  52(sp)
-    lw    a6,  56(sp)
-    lw    a7,  60(s
-# PowerShell snippet to overwrite your portASM.S with the full context save/restore stubs
-$file = "freertos/portable/RISC-V/portasm.S"
-
-@'
-    .section .text
-    .align 2
-
-    .extern xPortSysTickHandler       /* FreeRTOS tick handler */
-    .extern vPortYield               /* PendSV-style yield */
-
-    .global portSAVE_CONTEXT
-portSAVE_CONTEXT:
-    /* a0 = pointer to current TCB */
-    addi  sp, sp, -4 * 34            /* make room for x1?x31 + mstatus */
-    sw    ra,  0(sp)
-    sw    t0,  4(sp)
-    sw    t1,  8(sp)
-    sw    t2,  12(sp)
-    sw    t3,  16(sp)
-    sw    t4,  20(sp)
-    sw    t5,  24(sp)
-    sw    t6,  28(sp)
-    sw    a0,  32(sp)                /* preserve original a0 slot */
-    sw    a1,  36(sp)
-    sw    a2,  40(sp)
-    sw    a3,  44(sp)
-    sw    a4,  48(sp)
-    sw    a5,  52(sp)
-    sw    a6,  56(sp)
-    sw    a7,  60(sp)
-    sw    s0,  64(sp)
-    sw    s1,  68(sp)
-    sw    s2,  72(sp)
-    sw    s3,  76(sp)
-    sw    s4,  80(sp)
-    sw    s5,  84(sp)
-    sw    s6,  88(sp)
-    sw    s7,  92(sp)
-    sw    s8,  96(sp)
-    sw    s9,  100(sp)
-    sw    s10, 104(sp)
-    sw    s11, 108(sp)
-    sw    gp,  112(sp)
-    sw    tp,  116(sp)
-
-    /* Save mstatus */
-    csrr  t0, mstatus
-    sw    t0, 120(sp)
-
-    /* Store new SP into TCB */
-    sw    sp, 0(a0)
-    ret
-
-    .global portRESTORE_CONTEXT
-portRESTORE_CONTEXT:
-    /* a0 = pointer to current TCB */
-    lw    sp, 0(a0)
-
-    /* Restore mstatus */
-    lw    t0, 120(sp)
-    csrw  mstatus, t0
-
-    /* Restore all GPRs in reverse order */
+    /* Restore GPRs */
     lw    ra,  0(sp)
     lw    t0,  4(sp)
     lw    t1,  8(sp)
@@ -170,7 +92,15 @@ portRESTORE_CONTEXT:
     addi  sp, sp, 4 * 34
     ret
 
-/* In your mtimer trap handler (e.g. trap.S):
-   call xPortSysTickHandler
-   mret
-*/
+/*  
+ * In your mtimer trap handler (e.g. in trap.S):
+ * 
+ * mtimer_trap:
+ *     /* clear timer interrupt and reload */
+ *     ...
+ *     call xPortSysTickHandler
+ *     mret
+ *
+ * That wires the hardware tick into the FreeRTOS tick.
+ */
+
