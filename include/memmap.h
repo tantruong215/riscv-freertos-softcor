@@ -1,11 +1,13 @@
-// include/memmap.h
 #ifndef MEMMAP_H
 #define MEMMAP_H
 
-#define UART0_BASE   0x40001000U
-#define SPI0_BASE    0x40002000U
-#define GPIO_BASE    0x40003000U
-#define RAM_START    0x20000000U
-#define RAM_SIZE     0x00001000U  // 4 KB
+/* Core Local Interruptor (CLINT) base for machine timer */
+#define CLINT_BASE        0x02000000UL
+#define MTIME_OFFSET      0xBFF8UL
+#define MTIMECMP_OFFSET   0x4000UL
 
-#endif // MEMMAP_H
+/* Access macros for machine timer registers */
+#define MTIME    (*(volatile uint64_t *)(CLINT_BASE + MTIME_OFFSET))
+#define MTIMECMP (*(volatile uint64_t *)(CLINT_BASE + MTIMECMP_OFFSET))
+
+#endif /* MEMMAP_H */
