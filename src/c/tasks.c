@@ -1,18 +1,17 @@
 #include "uart.h"
 #include "FreeRTOS.h"
 #include "task.h"
-#include "ringbuf.h"
+#include "ringbuffer.h"
 
+/* Echo task: waits for ISR notifications, then drains & re-sends bytes */
 void vUARTEchoTask(void *pv) {
-    // Register this task for RX notifications
     UART_RegisterRxTask(xTaskGetCurrentTaskHandle());
 
     for (;;) {
-        // Wait until ISR notifies of new data
+        /* Block until ISR tells us data arrived */
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
         int c;
-        // Drain and echo
         while ((c = UART_ReceiveByte()) >= 0) {
             UART_SendByte((uint8_t)c);
         }
